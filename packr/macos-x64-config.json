@@ -2,9 +2,9 @@
     "platform": "mac64",
     "icon": "packr/app.icns",
     "jdk": "osx-jdk",
-    "executable": "Nexus",
+    "executable": "Paragon",
     "classpath": [
-        "target/Nexus.jar"
+        "target/Paragon.jar"
     ],
     "mainclass": "net.runelite.launcher.Launcher",
     "vmargs": [
@@ -12,5 +12,5 @@
        "-Xss2m",
        "-XX:CompileThreshold=1500"
     ],
-    "output": "native-osx/Nexus.app"
+    "output": "native-osx/Paragon.app"
 }

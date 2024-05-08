@@ -40,27 +40,27 @@ echo "${PACKR_HASH}  packr_${PACKR_VERSION}.jar" | shasum -c
 java -jar packr_${PACKR_VERSION}.jar \
     packr/macos-x64-config.json
 
-cp target/filtered-resources/Info.plist native-osx/Nexus.app/Contents
+cp target/filtered-resources/Info.plist native-osx/Paragon.app/Contents
 
-echo Setting world execute permissions on Nexus
-pushd native-osx/Nexus.app
-chmod g+x,o+x Contents/MacOS/Nexus
+echo Setting world execute permissions on Paragon
+pushd native-osx/Paragon.app
+chmod g+x,o+x Contents/MacOS/Paragon
 popd
 
-codesign -f -s "${SIGNING_IDENTITY}" --entitlements osx/signing.entitlements --options runtime native-osx/Nexus.app || true
+codesign -f -s "${SIGNING_IDENTITY}" --entitlements osx/signing.entitlements --options runtime native-osx/Paragon.app || true
 
 # create-dmg exits with an error code due to no code signing, but is still okay
 # note we use Adam-/create-dmg as upstream does not support UDBZ
-create-dmg --format UDBZ native-osx/Nexus.app native-osx/ || true
+create-dmg --format UDBZ native-osx/Paragon.app native-osx/ || true
 
-mv native-osx/Nexus\ *.dmg native-osx/Nexus-x64.dmg
+mv native-osx/Paragon\ *.dmg native-osx/Paragon-x64.dmg
 
-if ! hdiutil imageinfo native-osx/Nexus-x64.dmg | grep -q "Format: UDBZ" ; then
+if ! hdiutil imageinfo native-osx/Paragon-x64.dmg | grep -q "Format: UDBZ" ; then
     echo "Format of resulting dmg was not UDBZ, make sure your create-dmg has support for --format"
     exit 1
 fi
 
 # Notarize app
-if xcrun notarytool submit native-osx/Nexus-x64.dmg --wait --keychain-profile "AC_PASSWORD" ; then
-    xcrun stapler staple native-osx/Nexus-x64.dmg
+if xcrun notarytool submit native-osx/Paragon-x64.dmg --wait --keychain-profile "AC_PASSWORD" ; then
+    xcrun stapler staple native-osx/Paragon-x64.dmg
 fi

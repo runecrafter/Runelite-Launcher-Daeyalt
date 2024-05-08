@@ -1,9 +1,9 @@
 {
   "platform": "windowsaarch64",
   "jdk": "win-aarch64-jdk",
-  "executable": "Nexus",
+  "executable": "Paragon",
   "classpath": [
-    "target/Nexus.jar"
+    "target/Paragon.jar"
   ],
   "mainclass": "net.runelite.launcher.Launcher",
   "vmargs": [

@@ -12,10 +12,10 @@ begin
   if CurStep = ssPostInstall then begin
     WriteInstallId();
 
-    rlUpgrade := GetEnv('NEXUS_UPGRADE');
+    rlUpgrade := GetEnv('PARAGON_UPGRADE');
     if rlUpgrade <> '' then begin
-      exePath := ExpandConstant('{app}\Nexus.exe');
-      Exec(exePath, GetEnv('NEXUS_UPGRADE_PARAMS'), '', SW_SHOW, ewNoWait, ResultCode);
+      exePath := ExpandConstant('{app}\Paragon.exe');
+      Exec(exePath, GetEnv('PARAGON_UPGRADE_PARAMS'), '', SW_SHOW, ewNoWait, ResultCode);
     end;
   end;
 end;

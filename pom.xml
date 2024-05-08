@@ -30,8 +30,8 @@
 	<groupId>net.runelite</groupId>
 	<artifactId>launcher</artifactId>
 	<version>1.0</version>
-	<name>Nexus Launcher</name>
-	<description>Launcher for Nexus client</description>
+	<name>Paragon Launcher</name>
+	<description>Launcher for Paragon client</description>
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -152,7 +152,7 @@
 	</dependencies>
 
 	<build>
-		<finalName>Nexus</finalName>
+		<finalName>Paragon</finalName>
 
 		<resources>
 			<resource>
