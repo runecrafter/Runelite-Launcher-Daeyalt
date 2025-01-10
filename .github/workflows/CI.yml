@@ -121,7 +121,7 @@ jobs:
           native-linux-aarch64/Daeyalt-aarch64.AppImage
         if-no-files-found: error
   macos:
-    runs-on: macos-11
+    runs-on: macos-latest
     steps:
     - uses: actions/checkout@v3
     - name: cache
