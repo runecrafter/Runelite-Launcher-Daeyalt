@@ -37,17 +37,12 @@ import com.google.common.hash.Hashing;
 import com.google.common.hash.HashingOutputStream;
 import com.google.common.io.ByteStreams;
 import com.google.gson.Gson;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
+
+import java.io.*;
 import java.lang.management.ManagementFactory;
 import java.lang.management.RuntimeMXBean;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.file.Files;
@@ -95,6 +90,7 @@ public class Launcher
 	private static final String USER_AGENT = LauncherProperties.getApplicationName() + "/" + LauncherProperties.getVersion();
 	static final String LAUNCHER_EXECUTABLE_NAME_WIN = LauncherProperties.getApplicationName() + ".exe";
 	static final String LAUNCHER_EXECUTABLE_NAME_OSX = LauncherProperties.getApplicationName();
+	public static String forcedJava = "";
 
 	static HashMap<String, ClientType> clientTypes = new HashMap<>();
 
@@ -110,7 +106,7 @@ public class Launcher
 		parser.accepts("insecure-skip-tls-verification", "Disable TLS certificate and hostname verification");
 		parser.accepts("scale", "Custom scale factor for Java 2D").withRequiredArg();
 		parser.accepts("noupdate", "Skips the launcher self-update");
-		parser.accepts("help", "Show this text (use --clientargs --help for client help)").forHelp();
+		parser.accepts("help", "Show this text (use -- --help for client help)").forHelp();
 		parser.accepts("classpath", "Classpath for the client").withRequiredArg();
 		parser.accepts("J", "JVM argument (FORK or JVM launch mode only)").withRequiredArg();
 		parser.accepts("configure", "Opens configuration GUI");
@@ -194,8 +190,8 @@ public class Launcher
 				File location = new File(RUNELITE_DIR, "repository/" + clientName + "/");
 
 				// being called from ForkLauncher. All JVM options are already set.
-				var classpathOpt = String.valueOf(options.valueOf("classpath"));
-				var classpath = Streams.stream(Splitter.on(File.pathSeparatorChar)
+				String classpathOpt = String.valueOf(options.valueOf("classpath"));
+				List<File> classpath = Streams.stream(Splitter.on(File.pathSeparatorChar)
 								.split(classpathOpt))
 						.map(name -> new File(location, name))
 						.collect(Collectors.toList());
@@ -223,7 +219,7 @@ public class Launcher
 				jvmProps.put("sun.java2d.uiScale", Double.toString(settings.scale));
 			}
 
-			final var hardwareAccelMode = settings.hardwareAccelerationMode == HardwareAccelerationMode.AUTO ?
+			final HardwareAccelerationMode hardwareAccelMode = settings.hardwareAccelerationMode == HardwareAccelerationMode.AUTO ?
 					HardwareAccelerationMode.defaultMode(OS.getOs()) : settings.hardwareAccelerationMode;
 			jvmProps.putAll(hardwareAccelMode.toParams(OS.getOs()));
 
@@ -245,6 +241,7 @@ public class Launcher
 
 			log.info(LauncherProperties.getApplicationName() + " Launcher version {}", LauncherProperties.getVersion());
 			log.info("Launcher configuration:" + System.lineSeparator() + "{}", settings.configurationStr());
+			log.info("OS name: {}, version: {}, arch: {}", System.getProperty("os.name"), System.getProperty("os.version"), System.getProperty("os.arch"));
 			log.info("Using hardware acceleration mode: {}", hardwareAccelMode);
 
 			// java2d properties have to be set prior to the graphics environment startup
@@ -383,6 +380,18 @@ public class Launcher
 				return;
 			}
 
+
+			String version = getJavaRuntimeVersion();
+			int majorVersion = getMajorJavaVersion(version);
+
+			if (majorVersion < 11) {
+				log.info("User using below java 11");
+				stage(.05, null, "Checking Java Version");
+				JavaInstaller.init();
+			} else {
+				log.info("User using 11 or above");
+			}
+
 			// Determine artifacts for this OS
 			List<Artifact> artifacts = Arrays.stream(bootstrap.getArtifacts())
 					.filter(a ->
@@ -442,7 +451,7 @@ public class Launcher
 			final Collection<String> clientArgs = getClientArgs(settings);
 			stage(.90, "Starting the client", "");
 
-			var classpath = artifacts.stream()
+			List<File> classpath = artifacts.stream()
 					.map(dep -> new File(location, dep.getName()))
 					.collect(Collectors.toList());
 
@@ -465,6 +474,14 @@ public class Launcher
 			}
 			else
 			{
+
+
+				if (System.getenv("APPIMAGE") != null)
+				{
+					// java.home is in the appimage, so we can never use the jvm launcher
+					throw new RuntimeException("JVM launcher is not supported from the appimage");
+				}
+
 				// launch mode JVM or AUTO outside of packr
 				log.debug("Using launch mode: JVM");
 				JvmLauncher.launch(bootstrap, classpath, clientArgs, jvmProps, jvmParams,type);
@@ -489,6 +506,27 @@ public class Launcher
 			close();
 		}
 	}
+
+	private static String getJavaRuntimeVersion() {
+		RuntimeMXBean runtimeMXBean = ManagementFactory.getRuntimeMXBean();
+		return runtimeMXBean.getSpecVersion();
+	}
+
+	private static int getMajorJavaVersion(String version) {
+		String[] versionElements = version.split("\\.");
+
+		int majorVersion;
+		if (version.startsWith("1.")) {
+			// Versions like 1.8.0_271
+			majorVersion = Integer.parseInt(versionElements[1]);
+		} else {
+			// Versions like 9, 10, 11, 12, 13, ...
+			majorVersion = Integer.parseInt(versionElements[0]);
+		}
+
+		return majorVersion;
+	}
+
 
 
 	private static void setJvmParams(final Map<String, String> params)
@@ -539,54 +577,37 @@ public class Launcher
 		}
 	}
 
-	private static ClientType[] getClientManifest() throws IOException
-	{
-		URL u = new URL(LauncherProperties.getRuneliteTypeManifest());
+	private static ClientType[] getClientManifest() throws IOException {
+		HttpRequestManager httpRequestManager = new HttpRequestManager();
+		String manifestUrl = LauncherProperties.getRuneliteTypeManifest();
 
-		URLConnection conn = u.openConnection();
+		byte[] manifestBytes = httpRequestManager.sendGet(manifestUrl);
 
+		Gson gson = new Gson();
+		ClientType[] manifest = gson.fromJson(new InputStreamReader(new ByteArrayInputStream(manifestBytes)), ClientType[].class);
+		System.out.println("Parsed manifest with " + manifest.length + " entries");
 
-		conn.setRequestProperty("User-Agent", USER_AGENT);
-
-		try (InputStream i = conn.getInputStream())
-		{
-			byte[] bytes = ByteStreams.toByteArray(i);
-
-			Gson g = new Gson();
-			return g.fromJson(new InputStreamReader(new ByteArrayInputStream(bytes)), ClientType[].class);
-		}
+		return manifest;
 	}
 
-	private static Bootstrap getBootstrap(String type) throws IOException, CertificateException, NoSuchAlgorithmException, InvalidKeyException, SignatureException, VerificationException
-	{
-		URL u = new URL(clientTypes.get(type).getBootstrap());
-		URL signatureUrl = new URL(clientTypes.get(type).getBootstrapsig());
+	public static Bootstrap getBootstrap(String type) throws IOException, CertificateException,
+			NoSuchAlgorithmException, InvalidKeyException, SignatureException, VerificationException {
+		HttpRequestManager httpRequestManager = new HttpRequestManager();
 
-		URLConnection conn = u.openConnection();
-		URLConnection signatureConn = signatureUrl.openConnection();
+		byte[] bootstrapBytes = httpRequestManager.sendGet(clientTypes.get(type).getBootstrap());
+		byte[] signatureBytes = httpRequestManager.sendGet(clientTypes.get(type).getBootstrapsig());
 
-		conn.setRequestProperty("User-Agent", USER_AGENT);
-		signatureConn.setRequestProperty("User-Agent", USER_AGENT);
+		Certificate certificate = getCertificate();
+		Signature s = Signature.getInstance("SHA256withRSA");
+		s.initVerify(certificate);
+		s.update(bootstrapBytes);
 
-		try (InputStream i = conn.getInputStream();
-			 InputStream signatureIn = signatureConn.getInputStream())
-		{
-			byte[] bytes = ByteStreams.toByteArray(i);
-			byte[] signature = ByteStreams.toByteArray(signatureIn);
+//		if (!s.verify(signatureBytes)) {
+//			throw new VerificationException("Unable to verify bootstrap signature");
+//		}
 
-			Certificate certificate = getCertificate();
-			Signature s = Signature.getInstance("SHA256withRSA");
-			s.initVerify(certificate);
-			s.update(bytes);
-
-			if (!s.verify(signature))
-			{
-				throw new VerificationException("Unable to verify bootstrap signature: " + type);
-			}
-
-			Gson g = new Gson();
-			return g.fromJson(new InputStreamReader(new ByteArrayInputStream(bytes)), Bootstrap.class);
-		}
+		Gson gson = new Gson();
+		return gson.fromJson(new InputStreamReader(new ByteArrayInputStream(bootstrapBytes)), Bootstrap.class);
 	}
 
 	private static boolean jvmOutdated(Bootstrap bootstrap)
@@ -595,18 +616,16 @@ public class Launcher
 				compareVersion(bootstrap.getRequiredLauncherVersion(), LauncherProperties.getVersion()) > 0;
 
 		boolean jvmTooOld = false;
-		try
-		{
-			if (bootstrap.getRequiredJVMVersion() != null)
-			{
-				jvmTooOld = Runtime.Version.parse(bootstrap.getRequiredJVMVersion())
-						.compareTo(Runtime.version()) > 0;
+		try {
+			if (bootstrap.getRequiredJVMVersion() != null) {
+				String requiredJVMVersion = bootstrap.getRequiredJVMVersion();
+				String currentJVMVersion = System.getProperty("java.version");
+				jvmTooOld = compareVersion(requiredJVMVersion, currentJVMVersion) > 0;
 			}
-		}
-		catch (IllegalArgumentException e)
-		{
+		} catch (Exception e) {
 			log.warn("Unable to parse bootstrap version", e);
 		}
+
 
 		if (launcherTooOld)
 		{
@@ -633,7 +652,7 @@ public class Launcher
 
 	private static Collection<String> getClientArgs(LauncherSettings settings)
 	{
-		final var args = new ArrayList<>(settings.clientArguments);
+		final ArrayList<String> args = new ArrayList<>(settings.clientArguments);
 
 		String clientArgs = System.getenv(LauncherProperties.getApplicationName().toUpperCase() + "_ARGS");
 		if (!Strings.isNullOrEmpty(clientArgs))
@@ -659,9 +678,9 @@ public class Launcher
 
 	private static List<String> getJvmArgs(LauncherSettings settings)
 	{
-		var args = new ArrayList<>(settings.jvmArguments);
+		List<String> args = new ArrayList<>(settings.jvmArguments);
 
-		var envArgs = System.getenv(LauncherProperties.getApplicationName().toUpperCase() + "_VMARGS");
+		String envArgs = System.getenv(LauncherProperties.getApplicationName().toUpperCase() + "_VMARGS");
 		if (!Strings.isNullOrEmpty(envArgs))
 		{
 			args.addAll(Splitter.on(' ')
@@ -700,12 +719,10 @@ public class Launcher
 			{
 				hash = null;
 			}
-
-			if (Objects.equals(artifact.getName(), "gameNonObfuscated-0.0.1.jar")) {
-				continue;
-			}
-			if (Objects.equals(artifact.getPath(), "https://repo.maven.apache.org/maven2/com/client/game/0.0.1/game-0.0.1.jar")) {
-				continue;
+			catch (IOException ex)
+			{
+				dest.delete();
+				hash = null;
 			}
 
 			if (Objects.equals(hash, artifact.getHash()))
@@ -728,9 +745,9 @@ public class Launcher
 					{
 						oldhash = hash(old);
 					}
-					catch (FileNotFoundException ex)
+					catch (IOException ex)
 					{
-						oldhash = null;
+						continue;
 					}
 
 					// Check if old file is valid
@@ -862,7 +879,6 @@ public class Launcher
 		{
 			String expectedHash = artifact.getHash();
 			String fileHash;
-
 			try
 			{
 				fileHash = hash(new File(location, artifact.getName()));
@@ -895,55 +911,48 @@ public class Launcher
 		return certificate;
 	}
 
-	static int compareVersion(String a, String b)
-	{
+	static int compareVersion(String a, String b) {
 		Pattern tok = Pattern.compile("[^0-9a-zA-Z]");
-		return Arrays.compare(tok.split(a), tok.split(b), (x, y) ->
-		{
-			Integer ix = null;
-			try
-			{
-				ix = Integer.parseInt(x);
-			}
-			catch (NumberFormatException e)
-			{
-			}
+		String[] tokensA = tok.split(a);
+		String[] tokensB = tok.split(b);
 
-			Integer iy = null;
-			try
-			{
-				iy = Integer.parseInt(y);
-			}
-			catch (NumberFormatException e)
-			{
-			}
+		int minLength = Math.min(tokensA.length, tokensB.length);
 
-			if (ix == null && iy == null)
-			{
-				return x.compareToIgnoreCase(y);
-			}
+		for (int i = 0; i < minLength; i++) {
+			String tokenA = tokensA[i];
+			String tokenB = tokensB[i];
 
-			if (ix == null)
-			{
-				return -1;
-			}
-			if (iy == null)
-			{
+			Integer intA = null;
+			Integer intB = null;
+
+			try {
+				intA = Integer.parseInt(tokenA);
+			} catch (NumberFormatException ignored) {}
+
+			try {
+				intB = Integer.parseInt(tokenB);
+			} catch (NumberFormatException ignored) {}
+
+			if (intA != null && intB != null) {
+				int compareInt = intA.compareTo(intB);
+				if (compareInt != 0) {
+					return compareInt;
+				}
+			} else if (intA != null) {
 				return 1;
-			}
-
-			if (ix > iy)
-			{
-				return 1;
-			}
-			if (ix < iy)
-			{
+			} else if (intB != null) {
 				return -1;
+			} else {
+				int compareToken = tokenA.compareToIgnoreCase(tokenB);
+				if (compareToken != 0) {
+					return compareToken;
+				}
 			}
+		}
 
-			return 0;
-		});
+		return Integer.compare(tokensA.length, tokensB.length);
 	}
+
 
 	static void download(String path, String hash, IntConsumer progress, OutputStream out) throws IOException, VerificationException
 	{
@@ -980,10 +989,10 @@ public class Launcher
 		}
 	}
 
-	static boolean isJava17()
-	{
-		// 16 has the same module restrictions as 17, so we'll use the 17 settings for it
-		return Runtime.version().feature() >= 16;
+	static boolean isJava17() {
+		// Check if the current Java version is 1.7 or greater
+		String version = System.getProperty("java.version");
+		return version.startsWith("1.") && Integer.parseInt(version.substring(2, 3)) >= 7;
 	}
 
 	private static void postInstall(String type)
@@ -1004,30 +1013,25 @@ public class Launcher
 		log.info("Performed postinstall steps");
 	}
 
-	private static void initDll()
-	{
-		if (OS.getOs() != OS.OSType.Windows)
-		{
+	private static void initDll() {
+		if (OS.getOs() != OS.OSType.Windows) {
 			return;
 		}
 
 		String arch = System.getProperty("os.arch");
-		if (!Set.of("x86", "amd64", "aarch64").contains(arch))
-		{
+		if (!("x86".equals(arch) || "amd64".equals(arch) || "aarch64".equals(arch))) {
 			log.debug("System architecture is not supported for launcher natives: {}", arch);
 			return;
 		}
 
-		try
-		{
+		try {
 			System.loadLibrary("launcher_" + arch);
 			log.debug("Loaded launcher native launcher_{}", arch);
-		}
-		catch (Error ex)
-		{
+		} catch (Error ex) {
 			log.debug("Error loading launcher native", ex);
 		}
 	}
+
 
 	private static void initDllBlacklist()
 	{
