@@ -77,9 +77,9 @@ jobs:
       with:
         name: windows
         path: |
-          ParagonSetup64.exe
-          ParagonSetup32.exe
-          ParagonSetupAArch64.exe
+          DaeyaltSetup64.exe
+          DaeyaltSetup32.exe
+          DaeyaltSetupAArch64.exe
         if-no-files-found: error
   linux:
     runs-on: ubuntu-20.04
@@ -111,14 +111,14 @@ jobs:
     - uses: actions/upload-artifact@v3
       with:
         name: jar
-        path: target/Paragon.jar
+        path: target/Daeyalt.jar
         if-no-files-found: error
     - uses: actions/upload-artifact@v3
       with:
         name: linux
         path: |
-          native-linux-x86_64/Paragon.AppImage
-          native-linux-aarch64/Paragon-aarch64.AppImage
+          native-linux-x86_64/Daeyalt.AppImage
+          native-linux-aarch64/Daeyalt-aarch64.AppImage
         if-no-files-found: error
   macos:
     runs-on: macos-11
@@ -159,6 +159,6 @@ jobs:
       with:
         name: macos
         path: |
-          native-osx/Paragon-x64.dmg
-          native-osx-aarch64/Paragon-aarch64.dmg
+          native-osx/Daeyalt-x64.dmg
+          native-osx-aarch64/Daeyalt-aarch64.dmg
         if-no-files-found: error

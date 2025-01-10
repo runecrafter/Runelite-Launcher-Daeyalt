@@ -31,14 +31,14 @@ echo "${PACKR_HASH}  packr_${PACKR_VERSION}.jar" | sha256sum -c
 java -jar packr_${PACKR_VERSION}.jar \
     packr/win-x86-config.json
 
-tools/rcedit-x64 native-win32/Paragon.exe \
+tools/rcedit-x64 native-win32/Daeyalt.exe \
   --application-manifest packr/app.manifest \
   --set-icon app.ico
 
-echo Paragon.exe 32bit sha256sum
-sha256sum native-win32/Paragon.exe
+echo Daeyalt.exe 32bit sha256sum
+sha256sum native-win32/Daeyalt.exe
 
-dumpbin //HEADERS native-win32/Paragon.exe
+dumpbin //HEADERS native-win32/Daeyalt.exe
 
 # We use the filtered iss file
 iscc target/filtered-resources/app32.iss

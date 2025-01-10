@@ -12,10 +12,10 @@ begin
   if CurStep = ssPostInstall then begin
     WriteInstallId();
 
-    rlUpgrade := GetEnv('PARAGON_UPGRADE');
+    rlUpgrade := GetEnv('Daeyalt_UPGRADE');
     if rlUpgrade <> '' then begin
-      exePath := ExpandConstant('{app}\Paragon.exe');
-      Exec(exePath, GetEnv('PARAGON_UPGRADE_PARAMS'), '', SW_SHOW, ewNoWait, ResultCode);
+      exePath := ExpandConstant('{app}\Daeyalt.exe');
+      Exec(exePath, GetEnv('Daeyalt_UPGRADE_PARAMS'), '', SW_SHOW, ewNoWait, ResultCode);
     end;
   end;
 end;

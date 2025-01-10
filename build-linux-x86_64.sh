@@ -34,20 +34,20 @@ echo "${PACKR_HASH}  packr_${PACKR_VERSION}.jar" | sha256sum -c
 # Note: Host umask may have checked out this directory with g/o permissions blank
 chmod -R u=rwX,go=rX appimage
 # ...ditto for the build process
-chmod 644 target/Paragon.jar
+chmod 644 target/Daeyalt.jar
 
 java -jar packr_${PACKR_VERSION}.jar \
     packr/linux-x64-config.json
 
-pushd native-linux-x86_64/Paragon.AppDir
+pushd native-linux-x86_64/Daeyalt.AppDir
 mkdir -p jre/lib/amd64/server/
 ln -s ../../server/libjvm.so jre/lib/amd64/server/ # packr looks for libjvm at this hardcoded path
 
 # Symlink AppRun -> RuneLite
-ln -s Paragon AppRun
+ln -s Daeyalt AppRun
 
 # Ensure RuneLite is executable to all users
-chmod 755 Paragon
+chmod 755 Daeyalt
 popd
 
 if ! [ -f appimagetool-x86_64.AppImage ] ; then
@@ -59,5 +59,5 @@ fi
 echo "df3baf5ca5facbecfc2f3fa6713c29ab9cefa8fd8c1eac5d283b79cab33e4acb  appimagetool-x86_64.AppImage" | sha256sum -c
 
 ./appimagetool-x86_64.AppImage \
-	native-linux-x86_64/Paragon.AppDir/ \
-	native-linux-x86_64/Paragon.AppImage
+	native-linux-x86_64/Daeyalt.AppDir/ \
+	native-linux-x86_64/Daeyalt.AppImage

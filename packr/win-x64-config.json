@@ -1,9 +1,9 @@
 {
   "platform": "windows64",
   "jdk": "win64-jdk",
-  "executable": "Paragon",
+  "executable": "Daeyalt",
   "classpath": [
-    "target/Paragon.jar"
+    "target/Daeyalt.jar"
   ],
   "mainclass": "net.runelite.launcher.Launcher",
   "vmargs": [
